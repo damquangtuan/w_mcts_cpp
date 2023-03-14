@@ -32,6 +32,17 @@ public:
         mean = mean_;
         std = std_;
     }
+    void Add(double totalReward)
+    {
+        Count += 1.0;
+        Total += totalReward;
+    }
+
+    void Add(double totalReward, COUNT weight)
+    {
+        Count += weight;
+        Total += totalReward * weight;
+    }
     void IncrementCount() {
         Count += 1.0;
     }
@@ -90,6 +101,16 @@ public:
         return std;
     }
 
+    double GetValue() const
+    {
+        return Count == 0 ? Total : Total / Count;
+    }
+
+    double GetTotalValue() const
+    {
+        return Total;
+    }
+
     COUNT GetCount() const
     {
         return Count;
@@ -98,6 +119,7 @@ public:
 private:
 
     COUNT Count;
+    double Total;
     double mean, std;
 };
 
@@ -114,6 +136,10 @@ public:
 
     VNODE*& Child(int c) { return Children[c]; }
     VNODE* Child(int c) const { return Children[c]; }
+    VNODE*& Father() { return Parent; }
+    VNODE* Father() const { return Parent; }
+
+    void SetFather(VNODE* father);
     ALPHA& Alpha() { return AlphaData; }
     const ALPHA& Alpha() const { return AlphaData; }
 
@@ -129,6 +155,7 @@ public:
 private:
 
     std::vector<VNODE*> Children;
+    VNODE* Parent;
     ALPHA AlphaData;
 
     friend class VNODE;
@@ -142,6 +169,9 @@ public:
 
     VALUE<int> Value;
 
+    double CurExp;
+    double PrevExp;
+
     void Initialise();
     static VNODE* Create();
     static void Free(VNODE* vnode, const SIMULATOR& simulator);
@@ -150,6 +180,9 @@ public:
 
     QNODE& Child(int c) { return Children[c]; }
     const QNODE& Child(int c) const { return Children[c]; }
+    QNODE* Father() { return Parent; }
+    QNODE* Father() const { return Parent; }
+    void SetFather(QNODE* father);
     BELIEF_STATE& Beliefs() { return BeliefState; }
     const BELIEF_STATE& Beliefs() const { return BeliefState; }
 
@@ -167,6 +200,7 @@ public:
 private:
 
     std::vector<QNODE> Children;
+    QNODE* Parent;
     BELIEF_STATE BeliefState;
     static MEMORY_POOL<VNODE> VNodePool;
 };

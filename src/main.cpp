@@ -83,6 +83,9 @@ int main(int argc, char* argv[])
         ("ConstExpl", value<double>(&C), "C")
         ("initStd", value<double>(&initStd), "initStd")
         ("Power", value<double>(&p), "p")
+        ("temperature", value<double>(&searchParams.Temperature), "temperature")
+        ("epsilon", value<double>(&searchParams.Epsilon), "epsilon")
+        ("ments", value<bool>(&searchParams.useMents), "MENTS")
         ("useWstein", value<bool>(&useWstein), "wstein")
         ("visitsFile", value<string>(&visits_file), "visits")
         ("OptimisticSampling", value<bool>(&useOptimisticSampling), "os")
@@ -190,7 +193,6 @@ int main(int argc, char* argv[])
     
     else if (problem == "taxi")
     {
-
         real = new TAXI(size);
         simulator = new TAXI(size);
     }

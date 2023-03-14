@@ -32,6 +32,9 @@ MCTS::PARAMS::PARAMS()
     heur(0),
     s_time_elap(0.0),
     mytime(100),
+    Temperature(1.0),
+    Epsilon(1.0),
+    useMents(false),
     Rollouts(1)
 {
 }
@@ -209,7 +212,9 @@ void MCTS::UCTSearch()
 
         TreeDepth = 0;
         PeakTreeDepth = 0;
-        double totalReward = SimulateV(*state, Root);
+        double totalReward = 0.0;
+        if (!Params.useMents) totalReward = SimulateV(*state, Root);
+        else totalReward = SimulateVMents(*state, Root);
         StatTotalReward.Add(totalReward);
         StatTreeDepth.Add(PeakTreeDepth);
 
@@ -247,7 +252,6 @@ double MCTS::SimulateV(STATE& state, VNODE* vnode)
     }
     else action = UCT(vnode, false);
 
-
     PeakTreeDepth = TreeDepth;
     if (TreeDepth >= Params.MaxDepth) // search horizon reached
         return 0;
@@ -258,8 +262,6 @@ double MCTS::SimulateV(STATE& state, VNODE* vnode)
     QNODE& qnode = vnode->Child(action);
     double combVisits = vnode->Value.GetCount();
     double totalReward = SimulateQ(state, qnode, action, combVisits);
-
-
 
     vnode->Value.IncrementCount();
     if (UTILS::getUSeWstein()) {
@@ -397,7 +399,109 @@ double MCTS::SimulateQ(STATE& state, QNODE& qnode, int action, double combVisits
     return totalReward;
 }
 
+double MCTS::SimulateVMents(STATE& state, VNODE* vnode)
+{
+    int action = EXT3(vnode, false);
 
+    PeakTreeDepth = TreeDepth;
+
+    if (TreeDepth >= Params.MaxDepth) // search horizon reached
+        return 0;
+
+    if (TreeDepth == 1)
+        AddSample(vnode, state);
+
+    QNODE& qnode = vnode->Child(action);
+    qnode.SetFather(vnode);
+
+    double totalReward = SimulateQMents(state, qnode, action);
+    vnode->PrevExp = vnode->CurExp;
+    vnode->Value.Add(totalReward);
+    double totalCount = vnode->Value.GetCount();
+    double VExp = 0;
+    double Temperature = Params.Temperature;
+
+    for (int action = 0; action < Simulator.GetNumActions(); action++)
+    {
+        QNODE& qnode = vnode->Child(action);
+        double qvalue = qnode.Value.GetValue();
+        double count = qnode.Value.GetCount();
+
+        if (count == +LargeInteger)
+        {
+            continue;
+        }
+        if (qvalue == -Infinity)
+        {
+            continue;
+        }
+        VExp += double (exp(qvalue/Temperature));
+    }
+
+    vnode->CurExp = Temperature * log (VExp);
+
+//    AddRave(vnode, totalReward);
+    return vnode->CurExp;
+}
+
+double MCTS::SimulateQMents(STATE& state, QNODE& qnode, int action)
+{
+    int observation;
+    double immediateReward, delayedReward = 0;
+
+    if (Simulator.HasAlpha())
+        Simulator.UpdateAlpha(qnode, state);
+    bool terminal = Simulator.Step(state, action, observation, immediateReward, true);
+    assert(observation >= 0 && observation < Simulator.GetNumObservations());
+    History.Add(action, observation);
+
+    if (Params.Verbose >= 3)
+    {
+        Simulator.DisplayAction(action, cout);
+        Simulator.DisplayObservation(state, observation, cout);
+        Simulator.DisplayReward(immediateReward, cout);
+        Simulator.DisplayState(state, cout);
+    }
+
+    VNODE*& vnode = qnode.Child(observation);
+
+    if (!vnode && !terminal && qnode.Value.GetCount() >= Params.ExpandCount)
+    {
+        vnode = ExpandNode(&state);
+    }
+
+    bool isRollout = false;
+    if (!terminal)
+    {
+        TreeDepth++;
+        if (vnode)
+        {
+            vnode->SetFather(&qnode);
+            delayedReward = SimulateVMents(state, vnode);
+        }
+        else
+        {
+            isRollout = true;
+            delayedReward = Rollout(state);
+        }
+        TreeDepth--;
+    }
+//    else if (vnode)
+//    {
+//    	delayedReward = vnode->CurPowerMean;
+//    }
+
+    if (!isRollout && vnode)
+    {
+        int n = vnode->Value.GetCount();
+        delayedReward = n * vnode->CurExp - (n - 1) * vnode->PrevExp;
+    }
+
+    double totalReward = immediateReward + Simulator.GetDiscount() * delayedReward;
+    qnode.Value.Add(totalReward);
+
+    return totalReward;
+}
 
 VNODE* MCTS::ExpandNode(const STATE* state)
 {
@@ -474,7 +578,6 @@ int MCTS::OptimisticSampling(VNODE* vnode, bool greedy) const
         if (!greedy) {
             if (qnode.Value.GetCount() == 0) q = Infinity;
             else q = mean + UTILS::getC() * std *  std::sqrt(big_N_log);
-            
         }
         else {
             q = mean;
@@ -516,6 +619,90 @@ int MCTS::UCT(VNODE* vnode, bool greedy) const
         }
     }
     return besta;
+}
+
+int MCTS::EXT3(VNODE* vnode, bool greedy) const
+{
+    static vector<int> besta;
+    besta.clear();
+    double best_pi_a = -Infinity;
+    int N = vnode->Value.GetCount();
+    double V_s = vnode->CurExp;
+
+    double q, n, pi_a = 0.0, lambda, epsilon = Params.Epsilon, Temperature = Params.Temperature;
+    double log_sum = 0.0;
+    if (greedy) {
+        for (int action = 0; action < Simulator.GetNumActions(); action++) {
+            QNODE &qnode = vnode->Child(action);
+            q = qnode.Value.GetValue();
+            pi_a = q;
+
+            if (pi_a >= best_pi_a) {
+                if (pi_a > best_pi_a)
+                    besta.clear();
+                best_pi_a = pi_a;
+                besta.push_back(action);
+            }
+        }
+
+        assert(!besta.empty());
+        return besta[Random(besta.size())];
+    }
+
+    int A = Simulator.GetNumActions();
+
+    std::default_random_engine generator;
+    std::uniform_real_distribution<double> distribution(0.0,1.0);
+
+    double random = distribution(generator);
+
+    for (int action = 0; action < Simulator.GetNumActions(); action++) {
+        QNODE &qnode = vnode->Child(action);
+        n = qnode.Value.GetCount();
+
+        log_sum += n;
+    }
+
+    std::vector<double> likelihoods;
+    double total_likelihood = 0.;
+    bool notVisited = false;
+    lambda = epsilon * A / log(log_sum + 1);
+
+    if (random <= lambda)
+        return Random(A);
+    else {
+        for (int action = 0; action < Simulator.GetNumActions(); action++) {
+            QNODE &qnode = vnode->Child(action);
+            q = qnode.Value.GetValue();
+            n = qnode.Value.GetCount();
+
+            if (n == 0) {
+                pi_a = +Infinity;
+                notVisited = true;
+            } else {
+                pi_a = exp((q - V_s) / Temperature);
+//                if (pi_a > +Infinity) pi_a = +Infinity - 1;
+            }
+
+            likelihoods.push_back(pi_a);
+            total_likelihood += pi_a;
+
+            if ((pi_a >= best_pi_a) && (notVisited)) {
+                if (pi_a > best_pi_a)
+                    besta.clear();
+                best_pi_a = pi_a;
+                besta.push_back(action);
+            }
+        }
+        for (int i = 0; i < A; i++) {
+            likelihoods[i] /= total_likelihood;
+        }
+    }
+
+    if (notVisited)
+        return besta[Random(besta.size())];
+    else
+        return sample_discrete(likelihoods);
 }
 
 double MCTS::Rollout(STATE& state)

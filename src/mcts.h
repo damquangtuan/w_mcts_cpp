@@ -29,6 +29,9 @@ public:
         int heur;
         float s_time_elap;
         float mytime;
+        double Temperature;
+        double Epsilon;
+        bool useMents;
         int Rollouts;
     };
 
@@ -40,6 +43,8 @@ public:
 
     void UCTSearch();
     void RolloutSearch();
+
+    int EXT3(VNODE* vnode, bool greedy) const;
 
     double Rollout(STATE& state);
 
@@ -83,6 +88,8 @@ private:
     int SelectRandom() const;
     double SimulateV(STATE& state, VNODE* vnode);
     double SimulateQ(STATE& state, QNODE& qnode, int action, double combVisits);
+    double SimulateVMents(STATE& state, VNODE* vnode);
+    double SimulateQMents(STATE& state, QNODE& qnode, int action);
     void AddRave(VNODE* vnode, double totalReward);
     VNODE* ExpandNode(const STATE* state);
     void AddSample(VNODE* node, const STATE& state);

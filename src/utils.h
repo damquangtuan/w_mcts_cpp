@@ -2,6 +2,7 @@
 #define UTILS_H
 
 #include <vector>
+#include <random>
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
@@ -96,6 +97,20 @@ namespace UTILS
     inline int Sign(int x)
     {
         return (x > 0) - (x < 0);
+    }
+
+    inline int sample_discrete(std::vector<double> &probabilities) {
+        std::mt19937 gen;
+        std::uniform_real_distribution<double> dis;
+        double v = dis(gen);
+        int count = 0;
+        double acc = probabilities[0];
+        while (v > acc) {
+            count += 1;
+            acc += probabilities[count];
+        }
+
+        return count;
     }
 
     inline int Random(int max)

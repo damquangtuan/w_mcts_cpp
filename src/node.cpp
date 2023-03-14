@@ -17,6 +17,11 @@ void QNODE::Initialise()
     AlphaData.AlphaSum.clear();
 }
 
+void QNODE::SetFather(VNODE* father)
+{
+    Parent = father;
+}
+
 double QNODE::getNextStateValueMean(int observation, double combVisits)
 {
     double mean = 0.0;
@@ -196,6 +201,11 @@ void VNODE::SetChildren(int count, double value)
         qnode.Value.Set(count, value, UTILS::getInitStd());
 
     }
+}
+
+void VNODE::SetFather(QNODE* father)
+{
+    Parent = father;
 }
 
 void VNODE::DisplayValue(HISTORY& history, int maxDepth, ostream& ostr) const

@@ -47,6 +47,7 @@ public:
         int UndiscountedHorizon;
         bool AutoExploration;
         double C;
+        double temperature;
         bool useWstein;
         double p;
         double initStd;
